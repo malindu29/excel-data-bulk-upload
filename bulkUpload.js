@@ -4,9 +4,10 @@ import path from "node:path";
 import fs from "node:fs";
 
 // ---------- CONFIG ----------
-const ROW_COUNT = 400; // number of records to generate
+const ROW_COUNT = 500; // number of records to generate
 const OUTPUT_DIR = "output";
 const ID_TRACKER_FILE = path.join(OUTPUT_DIR, "last_student_id.txt");
+const NIC_TRACKER_FILE = path.join(OUTPUT_DIR, "last_nic_index.txt");
 
 // ---------- UTILS ----------
 function getLastStudentId() {
@@ -24,6 +25,23 @@ function saveLastStudentId(id) {
   }
   fs.writeFileSync(ID_TRACKER_FILE, String(id), "utf-8");
 }
+
+function getLastNicIndex() {
+  if (fs.existsSync(NIC_TRACKER_FILE)) {
+    const content = fs.readFileSync(NIC_TRACKER_FILE, "utf-8").trim();
+    const lastIndex = parseInt(content, 10);
+    return isNaN(lastIndex) ? 0 : lastIndex;
+  }
+  return 0;
+}
+
+function saveLastNicIndex(index) {
+  if (!fs.existsSync(OUTPUT_DIR)) {
+    fs.mkdirSync(OUTPUT_DIR);
+  }
+  fs.writeFileSync(NIC_TRACKER_FILE, String(index), "utf-8");
+}
+
 function sanitizeName(name) {
   // Remove any characters that are not letters or spaces
   let sanitized = name.replace(/[^a-zA-Z\s]/g, "").trim();
@@ -42,7 +60,7 @@ function sanitizeName(name) {
 }
 
 function generateStudentId(index) {
-  return `STD-ID${String(index).padStart(5, "0")}`;
+  return `STUDENT-ID${String(index).padStart(5, "0")}`;
 }
 
 function generateNIC(index) {
@@ -80,13 +98,15 @@ function generateBulkExcel(templatePath) {
   // Convert sheet to JSON (header-based)
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-  // Get the last used Student ID to continue from there
+  // Get the last used Student ID and NIC Index to continue from there
   let currentId = getLastStudentId();
+  let currentNicIndex = getLastNicIndex();
 
   const newRows = [];
 
   for (let i = 1; i <= ROW_COUNT; i++) {
     currentId++; // Increment to get the next unique ID
+    currentNicIndex++; // Increment to get the next unique NIC
     
     const firstName = sanitizeName(faker.person.firstName());
     const lastName = sanitizeName(faker.person.lastName());
@@ -107,12 +127,13 @@ function generateBulkExcel(templatePath) {
         lastName,
         provider: faker.helpers.arrayElement(tempMailDomains),
       }).toLowerCase(),
-      "National Identification Number*": generateNIC(i),
+      "National Identification Number*": generateNIC(currentNicIndex),
     });
   }
 
-  // Save the last used ID for next run
+  // Save the last used ID and NIC Index for next run
   saveLastStudentId(currentId);
+  saveLastNicIndex(currentNicIndex);
 
   // Convert back to sheet
   const newSheet = XLSX.utils.json_to_sheet(newRows, {
